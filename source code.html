@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<title>俄罗斯方块</title>
+<style type="text/css">
+/*小方块样式*/
+.c{margin:1px; width:19px; height:19px; background:red; position:absolute;}
+/*落下后样式*/
+.d{margin:1px; width:19px; height:19px; background:gray; position:absolute;}
+/*方块区域背景*/
+.f{top:0px; left:0px; background:black; position:absolute;}
+/*预告区域背景*/
+.e{top:0px; background:blue; position:absolute;}
+/*得分样式*/
+.g{width:100px; height:20px; color:white; position:absolute;}
+</style>
+<script type="text/javascript">
+var row = 18;                                   //整体高度
+var col = 10;                                   //方块区域宽度
+var col2 = 6;                                   //预告区域宽度
+var size = 20;                                  //每个小方块大小
+var isOver = false;                             //判断游戏是否结束
+var shapes = ("0,1,1,1,2,1,3,1;1,0,1,1,1,2,2,2;2,0,2,1,2,2,1,2;0,1,1,1,1,2,2,2;1,2,2,2,2,1,3,1;1,1,2,1,1,2,2,2;0,2,1,2,1,1,2,2").split(";");  
+/*分割为七个数组，每个数组两个数一对，单数left双数top，定位每个小方块的左上角坐标
+               ****            *                *              **               **             **               *
+			                   *                *               **             **              **              ***
+							   **              **
+*/
+var tetris;                                     //存放每次下落小方块的属性和方法
+var container;                                  //存放界面显示的方法
+
+function createElm(tag,css){                    //游戏开始 传参数(div,f)绘制方块区域背景div
+	var elm = document.createElement(tag); 
+	elm.className = css;
+	document.body.appendChild(elm);
+	return elm;
+}     
+                                                                                                                        //ok
+function Tetris(css,x,y,shape){                 //d x y shape  xy方块的相对位置
+	//创建4个div用来组合出各种方块
+	var myCss = css?css:"c";                    //判断如果参数是d表示已经落下样式设置为灰色，否则c样式红色（d或c都是每一个小格子的样式）
+	this.divs = [createElm("div",myCss),createElm("div",myCss),createElm("div",myCss),createElm("div",myCss)];
+	if(!shape){
+		this.divs2 = [createElm("div",myCss),createElm("div",myCss),createElm("div",myCss),createElm("div",myCss)];
+		this.score = createElm("div","g");                
+		this.score.style.top = 10*size+"px";
+		this.score.style.left =(col+1)*size+"px";
+		this.score.innerHTML = "score:0";
+	}                                                                                                                         
+	this.container = null;                                       //用来接收Container构造出的对象
+	
+	//随机显示要出现的方块
+	this.refresh = function(){
+		this.x = (typeof(x)!='undefined')?x:3;                   //初始化x,y位置
+		this.y = (typeof(y)!='undefined')?y:0;
+		//如果有传参，优先使用参数的，如果有预告，优先使用预告，都没有就自己生成                                             
+		if(shape){
+			this.shape = shape;
+		}else if(this.shape2){
+			this.shape = this.shape2;
+		}else{                                                   //根据随机产生的值产生下落方块和预告方块
+			this.shape = shape?shape:shapes[Math.floor(Math.random()*shapes.length-0.000000001)].split(","); //以逗号分隔为以每个数为单位的数组
+		}
+		this.shape2 = shapes[Math.floor(Math.random()*shapes.length-0.000000001)].split(",");                //-0.000000001是取0-6随机数，减去的数越小，七个随机数概率相差越小
+		if(this.container && !this.container.check(this.x,this.y,this.shape)){
+			isOver = true;
+			alert("游戏结束");
+		}else{                                                   //显示方块、分数、预告方块
+			this.show();              
+			this.showScore();
+			this.showAnnouncement();
+		}
+	}
+
+	//显示方块                                                         
+	this.show = function(){
+		for(var i in this.divs){                                 //遍历divs设置每个子方块的位置
+			this.divs[i].style.top = (this.shape[i*2+1]*1+this.y)*size+"px";          //取数组中的双数设置top值（若i=0，shape[1]对应数组中第二个数，所以是双数，设置top）
+			this.divs[i].style.left = (this.shape[i*2]*1+this.x)*size+"px";
+		}
+	}
+	
+	//显示预告                                                                                                   
+	this.showAnnouncement = function(){
+		for(var i in this.divs2){                                //遍历divs2设置预告子方块的位置
+			this.divs2[i].style.top = (this.shape2[i*2+1]*1+3)*size+"px";             //定位预告方块top位置,*1先强制转换为数字，还可以表示为(this.shape2[i*2+1]- -3)*size+"px";
+			this.divs2[i].style.left = (this.shape2[i*2]*1+1+col)*size+"px";
+		}
+	}
+	
+	//显示分数
+	this.showScore = function(){
+		if(this.container && this.score){
+			this.score.innerHTML = "score:" + this.container.score;
+		}
+	}
+	
+	//水平移动方块的位置
+	this.hMove = function(step){
+		if(this.container.check(this.x+step,this.y,this.shape)){
+			this.x += step;
+			this.show();
+		}
+	}
+	
+	//垂直移动方块位置
+	this.vMove = function(step){
+		if(this.container.check(this.x,this.y+step,this.shape)){
+			this.y += step;
+			this.show();
+		}else{
+			this.container.fixShape(this.x,this.y,this.shape);
+			this.container.findFull();
+			this.refresh();
+		}
+	}
+	
+	//旋转方块
+	this.rotate = function(){
+		var newShape = [this.shape[1],3-this.shape[0],this.shape[3],3-this.shape[2],this.shape[5],3-this.shape[4],this.shape[7],3-this.shape[6]];
+		if(this.container.check(this.x,this.y,newShape)){
+			this.shape = newShape;
+			this.show();
+		}
+	}
+	this.refresh();
+}
+
+function Container(){
+
+	this.init = function(){
+		//绘制方块所在区域
+		var bgDiv = createElm("div","f");                //创建方块区域背景div，函数return一个div
+		bgDiv.style.width = size*col+"px";
+		bgDiv.style.height = size*row+"px";
+		//绘制预告所在区域
+		var bgDiv = createElm("div","e");                //创建预告区域背景div，函数return一个div
+		bgDiv.style.left = size*col+"px";                //设置预告div的left值（和方块区域宽度一致）
+		bgDiv.style.width = size*col2+"px";    
+		bgDiv.style.height = size*row+"px";    
+		//清空积分
+		this.score = 0;
+	}   
+	
+	this.check = function(x,y,shape){                    //xy出现方块相对位置坐标 出现方块形状
+		//检查边界越界
+		var flag = false;
+		var leftmost=col;                                //距离左边界
+		var rightmost=0;
+		var undermost=0;
+		for(var i=0;i<8;i+=2){                           //两个一组单数个是每一个方格的左上角的left距离
+			//记录最左边水平坐标               
+			if(shape[i]<leftmost)
+				leftmost = shape[i];
+			//记录最右边水平坐标
+			if(shape[i]>rightmost)
+				rightmost = shape[i];
+			//记录最下边垂直坐标
+			if(shape[i+1]>undermost)                     //+1为双数个的top距离
+				undermost = shape[i+1];
+			//判断方块是否碰撞下方已落方块
+			if(this[(shape[i+1]*1+y)*100+(shape[i]*1+x)])//根据正落下方块坐标和已经落下的看是否碰撞
+				flag = true;
+		}
+		//判断是否到达极限高度
+		for(var m=0;m<3;m++)                             //距最上方还有两个方格时判断为到达极限高度
+			for(var n=0;n<col;n++)
+				if(this[m*100+n])
+					flag = true;
+		if((rightmost*1+x+1)>col || (leftmost*1+x)<0 || (undermost*1+y+1)>row || flag)
+			return false;                                //代表越界或已达极限高度
+		return true;
+	}
+	
+	//用灰色方块替换红色方块，并在容器中记录灰色方块的位置
+	this.fixShape = function(x,y,shape){
+		var t = new Tetris("d",x,y,shape);
+		for(var i=0;i<8;i+=2)
+			this[(shape[i+1]*1+y)*100+(shape[i]*1+x)] = t.divs[i/2];// i/2取0、1、2、3替换组成方块的四个子方块
+	}
+	
+	//遍历整个容器，判断是否可以消除
+	this.findFull = function(){
+		var s = 0;
+		for(var m=0;m<row;m++){
+			var count = 0;
+			for(var n=0;n<col;n++){                          //遍历一行若有方块++
+				if(this[m*100+n])
+					count++;
+			}
+			if(count==col){                                  //若一行满方块消除、积分
+				s++;
+				this.removeLine(m);
+			}
+		}
+		this.score += this.calScore(s);
+	}
+	
+	this.calScore = function(s){                             //计算分数函数，分数为消除行数的平方
+		if(s!=0)
+			return s*s;
+		else
+			return 0;
+	}
+	
+	// 消除指定一行方块
+	this.removeLine = function(row){
+		// 移除一行方块
+		for(var n=0;n<col;n++)
+			document.body.removeChild(this[row*100+n]);      //接收要消除的row值（不是全局变量），遍历一行删除
+		// 把所消除行上面所有的方块下移一行
+		for(var i=row;i>0;i--){
+			for(var j=0;j<col;j++){
+				this[i*100+j] = this[(i-1)*100+j]
+				if(this[i*100+j])
+					this[i*100+j].style.top = i*size + "px";
+			}
+		}
+	}
+}
+function init(){
+	container = new Container();                            //创建界面对象
+	container.init();                                       //并调用显示方法
+	tetris = new Tetris();                                  //创建方块对象
+	tetris.container = container;                           //对象内属性接收显示界面对象
+	
+	document.onkeydown = function(e){                       //按下键时发生
+		if(isOver) return;
+		var e = window.event?window.event:e;                //考虑浏览器兼容性
+		switch(e.keyCode){                                  //根据按键决定方法
+			case 38: //up
+				tetris.rotate();
+				break;
+			case 40: //down
+				tetris.vMove(1);
+				break;
+			case 37: //left
+				tetris.hMove(-1);
+				break;
+			case 39: //right
+				tetris.hMove(1);
+				break;
+		}
+	}
+	setInterval("if(!isOver) tetris.vMove(1)",500);         //每隔0.5秒执行一次方块下落并判断是否满行
+}
+</script>
+</head>
+<body onload="init()">
+</body>
+</html>
